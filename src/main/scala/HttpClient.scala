@@ -17,13 +17,13 @@ class HttpClient(key: String):
         //httppost.setHeader(new BasicHeader("api-key", key))
         httppost.setHeader(new BasicHeader("Content-Type", "application/json"))
         val response = httpclient.execute(httppost)
-        println(s"response=${response}")
+        //println(s"response=${response}")
         try
           //val res = response.returnResponse
           val res = response.getEntity
-          println(res)
+          //println(res)
           val len = res.getContentLength
-          println(s"len=${len}")
+          //println(s"len=${len}")
           var buffer = new Array[Byte](len.toInt)
           res.getContent.read(buffer)
           val message = buffer.foldLeft("")((f, g) => f + g.toChar)

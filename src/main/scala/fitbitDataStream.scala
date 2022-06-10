@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets
 import org.mapdb._
 import com.github.nscala_time.time.Imports._
 import scala.annotation.meta.param
+import org.tinylog.Logger
 
 class FitbitDataStream(fileName: String):
     val res = File(fileName).contentAsString
@@ -26,52 +27,40 @@ class FitbitDataStream(fileName: String):
     val scopes = "activity heartrate location sleep"
     val responseType = "code"
     //val responseType = "token"
-    val mapdbFile = params.get("mapdbFile").asInstanceOf[String]
-    val db =   
-             try
-               DBMaker.fileDB(mapdbFile).make
-             catch
-               case e: org.mapdb.DBException.FileLocked => println(s"DBException: ${e}")
-                         println("Copying original db...")
-                         File(mapdbFile).copyTo(File(s"${mapdbFile}.bak"), true)
-                         println("Deleting original db...")
-                         File(mapdbFile).delete(true)
-                         DBMaker.fileDB(mapdbFile).make
-               case e: Throwable => println(e); DBMaker.fileDB("/tmp/db").make
-//    println(s"a=${a.getClass}")
-//    val db =               DBMaker.fileDB(mapdbFile).make
-    val mapdb = db.hashMap("mapdb", Serializer.STRING, Serializer.STRING).createOrOpen
+
     //var accessToken = params.get("accessToken").asInstanceOf[String]
     //var refreshToken = params.get("refreshToken").asInstanceOf[String]
+    val mapdbFile = params.get("mapdbFile").asInstanceOf[String]
+    val mapdb = MapDB(mapdbFile)
+    mapdb.open
     var accessToken = mapdb.get("accessToken")
     var refreshToken = mapdb.get("refreshToken")
     var codeVerifier = "01234567890123456789012345678901234567890123456789"
     if accessToken == null then
         println("accessToken is empty")
         getAccessToken
-    def close =
-        db.close
+    mapdb.close
 
     def introspect =
         val url = uri"https://api.fitbit.com/1.1/oauth2/introspect"
         val body = collection.mutable.Map[String, String]()
         body("token") = accessToken
         //body("token") = refreshToken
-        println(s"request body=${body.asJson}")
-        println(s"request body=${body.asJson.toString}")
+        //println(s"request body=${body.asJson}")
+        //println(s"request body=${body.asJson.toString}")
         val req = basicRequest.auth.bearer(accessToken)
                    .header("Content-type", "application/x-www-form-urlencoded")
                    .body(body.toMap)
                    .post(url)
                    .response(asString)
-        println(s"req=${req}")
+        //println(s"req=${req}")
         val backend = HttpURLConnectionBackend()
         val res = req.send(backend)
-        println(res)
+        //println(res)
         if res.code.isSuccess then
           val doc = jsonParse(res.body.right.get).right.get
           val cur = doc.hcursor
-          println(doc)
+          //println(doc)
           val active = cur.downField("active").as[Boolean].right.get
           if active then
               val scope =  cur.downField("scope").as[String].right.get
@@ -79,16 +68,16 @@ class FitbitDataStream(fileName: String):
               val userId =  cur.downField("user_id").as[String].right.get
               val exp = cur.downField("exp").as[Long].right.get.toDateTime
               val iat = cur.downField("iat").as[Long].right.get.toDateTime
-              println(s"token=${accessToken}")
-              println(s"active=${active}")
-              println(s"clientId=${clientId}")
-              println(s"userId=${userId}")
-              println(s"expiration date=${exp}")
-              println(s"issued date=${iat}")
+              //println(s"token=${accessToken}")
+              //println(s"active=${active}")
+              //println(s"clientId=${clientId}")
+              //println(s"userId=${userId}")
+              //println(s"expiration date=${exp}")
+              //println(s"issued date=${iat}")
           else
-              println(doc)
+              println(s"not sctive: ${doc}")
         else
-          println(res)
+          println(s"not isSuccess: ${res}")
     def getAccessToken =
         val backend = HttpURLConnectionBackend()
         //val basicToken = Base64.encodeString(s"${clientId}:${clientSecret}")
@@ -106,19 +95,21 @@ class FitbitDataStream(fileName: String):
                        .get(url)
                        .body(body.toMap)
                        .response(asString)
-        println(s"req=${req}")
+        //println(s"req=${req}")
         val ret = req.send(backend)
-        println(s"ret=${ret}")
+        //println(s"ret=${ret}")
         if ret.code.isSuccess then
             //println(s"ret.body=${ret.body}")
             val doc = jsonParse(ret.body.getOrElse("")).getOrElse(Json.Null)
             val cur = doc.hcursor
             accessToken = cur.downField("access_token").as[String].getOrElse("")
-            println(s"access token=${accessToken}")
+            //println(s"access token=${accessToken}")
             refreshToken = cur.downField("refresh_token").as[String].getOrElse("")
-            println(s"refresh token=${refreshToken}")
+            //println(s"refresh token=${refreshToken}")
+            mapdb.open
             mapdb.put("accessToken", accessToken)
             mapdb.put("refreshToken", refreshToken)
+            mapdb.close
         else
             val doc = jsonParse(ret.body.left.get).right.get
             println(s"left.get=${doc}")
@@ -152,18 +143,26 @@ class FitbitDataStream(fileName: String):
         body("code_challenge") = codeChallenge
         body("code_challenge_method") = "S256"
         body("response_type") = "code"
-        val url = uri"https://api.fitbit.com/oauth2/authorize?${body.toMap}"
-        val req = basicRequest
+        var url = uri"https://api.fitbit.com/oauth2/authorize?${body.toMap}"
+        var req = basicRequest
                        .get(url)
                        .response(asString)
-        println(s"req=${req}")
-        val ret = req.send(backend)
+        //println(s"req=${req}")
+        var ret = req.send(backend)
         //println(s"ret=${ret}")
         println(s"headers=${ret.headers}")
         println(s"request=${ret.request}")
         println(s"request.method=${ret.request.method}")
         println(s"request.uri(for obtaining code)=${ret.request.uri}")
         println(s"request.headers=${ret.request.headers}")
+        /**
+        url = ret.request.uri
+        req = basicRequest
+                       .get(url)
+                       .response(asString)
+        ret = req.send(backend)
+        println(s"ret=$ret")
+          * */
         //val ret2 = basicRequest.get(ret.request.uri).response(asString).send(backend)
         //println(s"ret2=${ret2}")
 /*
@@ -185,6 +184,15 @@ class FitbitDataStream(fileName: String):
          accessToken = token
          token
  */
+    def activityLogList(afterDate: String) =
+        val url = s"https://api.fitbit.com/1/user/${userId}/activities/list.json?afterDate=${afterDate}&sort=asc&limit=3&offset=0"
+        getApiResponse(url)
+    def getActivityLogList(afterDate: String) =
+        val retJson = activityLogList(afterDate)
+        Logger.debug("json={}", retJson)
+        val activityLog = ActivityLog(retJson)
+        Logger.debug("activityLog={}", activityLog)
+        activityLog
     def heart(date: String, period: String) =
         val url = s"https://api.fitbit.com/1/user/${userId}/activities/heart/date/${date}/${period}.json"
         getApiResponse(url)
@@ -205,7 +213,17 @@ class FitbitDataStream(fileName: String):
     **/
     def heartIntraday(date: String, detailLevel: String, startTime: String, endTime: String) =
         val url = s"https://api.fitbit.com/1/user/${userId}/activities/heart/date/${date}/1d/${detailLevel}/time/${startTime}/${endTime}.json"
-        getApiResponse(url)
+        Logger.debug("heartIntraday: {}", s"url=$url")
+        val ret = getApiResponse(url)
+        //Logger.debug("heartIntraday: {}", ret)
+        ret
+
+    def activityIntraday(resource: String, date: String, detailLevel: String, startTime: String, endTime: String) =
+        val url = s"https://api.fitbit.com/1/user/${userId}/activities/${resource}/date/${date}/1d/${detailLevel}/time/${startTime}/${endTime}.json"
+        Logger.debug("activityIntraday: {}", s"url=$url")
+        val ret = getApiResponse(url)
+        Logger.debug("activityIntraday: {}", ret)
+        ret
 
     /**
         @param targetDate target date string in the format yyyy-MM-dd
@@ -215,6 +233,7 @@ class FitbitDataStream(fileName: String):
     def getActivityHeartIntradayDataSeries(targetDate: String, startTimeString: String, endTimeString: String) =
         val startDateTimeString = s"${targetDate}T${startTimeString}"
         val endDateTimeString = s"${targetDate}T${endTimeString}"
+        //val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val heart = ActivityHeartTime(retJson)
         val dataset = heart.`activities-heart-intraday`.dataset.toSeq
@@ -226,16 +245,24 @@ class FitbitDataStream(fileName: String):
         val complemented = timeSeries.map{f =>
               val target = dataset.filter(g => g.time == f)
               target.length match
-                  case 0 => Dataset(f, 59L)
-                  case 1 => target(0)
-                  case _ => Dataset("error", 0L)
+                  case 0 => Left(f)
+                  case 1 => Right(target(0))
+                  case _ => Left("error")
           }
+       /**
         (0 +: complemented).zip(complemented :+ 0).slice(1, complemented.length).foreach{f =>
                dataSeries += f._1.asInstanceOf[Dataset].value
                //file.appendLine(s"${f._1.asInstanceOf[Dataset].time.substring(0, 5)} ${f._1.asInstanceOf[Dataset].value.toDouble} ${f._2.asInstanceOf[Dataset].value.toDouble}")
           }
-        dataSeries
+       * */
+        //dataSeries
+        complemented
 
+    def getSleepDataSeries(date: String) =
+        val retJson = sleep(date)
+        Logger.debug("json={}", retJson)
+        val sleepData = Sleep(retJson)
+        sleepData
     def sleep(date: String) =
         val url = s"https://api.fitbit.com/1.2/user/${userId}/sleep/date/${date}.json"
         getApiResponse(url)
@@ -247,17 +274,17 @@ class FitbitDataStream(fileName: String):
         val req = basicRequest.auth.bearer(accessToken)
                    .get(uri)
                    .response(asString)
-        println(s"req=${req}")
+        //println(s"req=${req}")
         val backend = HttpURLConnectionBackend()
         val res = req.send(backend)
-        println(s"res=${res}")
-        println(s"code=${res.code}")
+        //println(s"res=${res}")
+        //println(s"code=${res.code}")
         val ret = if res.code.isSuccess then
           val ret = res.body.getOrElse("")
           ret
         else
           val doc = jsonParse(res.body.left.get).right.get
-          println(s"left.get=${doc}")
+          Logger.debug("left.get={}", doc)
           val cur = doc.hcursor
           val errorType = cur.downField("errors").downArray
                              .downField("errorType").as[String].right.get
@@ -269,6 +296,7 @@ class FitbitDataStream(fileName: String):
         ret
 
     def getRefreshToken =
+        Logger.debug("getRefreshToken", true)
         val url = uri"https://api.fitbit.com/oauth2/token"
         val body = collection.mutable.Map[String, String]()
         body("grant_type") = "refresh_token"
@@ -279,27 +307,29 @@ class FitbitDataStream(fileName: String):
                    .post(url)
                    .body(body.toMap)
                    .response(asString)
-        println(s"req=${req}")
+        //println(s"req=${req}")
         val backend = HttpURLConnectionBackend()
         val res = req.send(backend)
         if res.code.isSuccess then
           println("refresh success")
-          println(res)
-          println(res.body.right.get)
+          //println(res)
+          //println(res.body.right.get)
           val doc = jsonParse(res.body.right.get).right.get
           val cur = doc.hcursor
           accessToken = cur.downField("access_token").as[String].right.get
           refreshToken = cur.downField("refresh_token").as[String].right.get
+          mapdb.open
           mapdb.put("accessToken", accessToken)
           mapdb.put("refreshToken", refreshToken)
+          mapdb.close
         else
-          println(res)
+          //println(res)
           println("refresh failure")
     def generateHash(password: String) = 
         import java.security.MessageDigest
         val digest = MessageDigest.getInstance("SHA-256")
         val result = digest.digest(password.getBytes)
-        println(result.toSeq)
+        //println(result.toSeq)
         import java.math.BigInteger
         val hash = String.format("%040x", new BigInteger(1, result))
         println(s"hash=${hash}")

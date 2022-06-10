@@ -16,7 +16,7 @@ extension (t: DateTime)
 
 extension (t: Interval)
     def toStringTimeSeries(fmt: DateTimeFormatter) =
-        println(s"start:${t.getStart}")
+        //println(s"start:${t.getStart}")
         (t.getStart.toSec until t.getEnd.toSec).toList
            .map(f => (new LocalTime(f*1000)).toString(fmt))
 

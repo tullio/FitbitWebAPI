@@ -11,7 +11,8 @@ case class ActivityHeartTime(
 object ActivityHeartTime:
   implicit val decoder: Decoder[ActivityHeartTime] = deriveDecoder
   def apply(json: String) =
-      println(decode[ActivityHeartTime](json))
+      //println(s"json=${json}")
+      //println(s"decode=${decode[ActivityHeartTime](json)}")
       decode[ActivityHeartTime](json).right.get
 
 case class activitiesHeartRateZones(

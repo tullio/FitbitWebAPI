@@ -1,9 +1,19 @@
 package org.example
 import io.circe._
+//import io.circe.generic.extras.Configuration
 import io.circe.generic.semiauto._
-case class Sleep(sleep: Array[sleep])
+import io.circe.parser.decode
+import org.tinylog.Logger
+
+//implicit val config: Configuration = Configuration.default.withDefaults
+//case class Sleep(sleep: Array[sleep] = Nil, summary: Summary)
+case class Sleep(sleep: Array[sleep], summary: Summary)
 object Sleep:
   implicit val decoder: Decoder[Sleep] = deriveDecoder
+  def apply(json: String) =
+      //Logger.debug("json={}", json.substring(10))
+      Logger.debug("decode={}", decode[Sleep](json))
+      decode[Sleep](json).right.get
 
 case class sleep(
     dateOfSleep: String,
@@ -27,6 +37,7 @@ object sleep:
 
 case class sleepLevels(
     data: Array[sleepData],
+    shortData: Array[sleepData],
     summary: sleepSummary,
 )
 object sleepLevels:
@@ -39,6 +50,33 @@ case class sleepData(
 object sleepData:
   implicit val decoder: Decoder[sleepData] = deriveDecoder
 
+case class sleepSummary(
+    deep: DeepData,
+    light: LightData,
+    rem: RemData,
+    wake: WakeData
+)
+case class DeepData(
+    count: Long,
+    minutes: Long,
+    thirtyDayAvgMinutes: Long
+)
+case class LightData(
+    count: Long,
+    minutes: Long,
+    thirtyDayAvgMinutes: Long
+)
+case class RemData(
+    count: Long,
+    minutes: Long,
+    thirtyDayAvgMinutes: Long
+)
+case class WakeData(
+    count: Long,
+    minutes: Long,
+    thirtyDayAvgMinutes: Long
+)
+/**
 case class asleep(
     count: Long,
     minutes: Long)
@@ -52,4 +90,23 @@ case class sleepSummary(
     asleep: asleep,
     awake: awake,
     restless: restless)
+  **/
 //implicit val SleepDecoder: Decoder[Sleep] = deriveDecoder
+case class Summary(
+    stages: Option[Stages],
+    totalMinutesAsleep: Long,
+    totalSleepRecords: Long,
+    totalTimeInBed: Long
+)
+
+object Summary:
+  implicit val decoder: Decoder[Summary] = deriveDecoder
+
+case class Stages(
+    deep: Long,
+    light: Long,
+    rem: Long,
+    wake: Long
+)
+object Stages:
+  implicit val decoder: Decoder[Stages] = deriveDecoder
