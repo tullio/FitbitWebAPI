@@ -39,18 +39,33 @@ class circeSpec extends AnyFunSuite:
                         "seconds": 1800
                       }
                     ],
+                   "shortData": [
+                     {
+                       "dateTime": "2020-02-21T00:10:30.000",
+                       "level": "wake",
+                       "seconds": 30
+                     }
+                    ],
                     "summary": {
-                      "asleep": {
-                        "count": 3,
-                        "minutes": 65
+                      "deep": {
+                        "count": 5,
+                        "minutes": 104,
+                        "thirtyDayAvgMinutes": 69
                       },
-                      "awake": {
-                        "count": 0,
-                        "minutes": 0
+                      "light": {
+                        "count": 32,
+                        "minutes": 205,
+                        "thirtyDayAvgMinutes": 202
                       },
-                      "restless": {
-                        "count": 4,
-                        "minutes": 11
+                      "rem": {
+                        "count": 11,
+                        "minutes": 75,
+                        "thirtyDayAvgMinutes": 87
+                      },
+                      "wake": {
+                        "count": 11,
+                        "minutes": 75,
+                        "thirtyDayAvgMinutes": 87
                       }
                     }
                   },
@@ -63,7 +78,19 @@ class circeSpec extends AnyFunSuite:
                   "timeInBed": 76,
                   "type": "classic"
                 }
-              ] }
+              ],
+              "summary": {
+                "stages": {
+                  "deep": 104,
+                  "light": 205,
+                  "rem": 75,
+                  "wake": 78
+                },
+                "totalMinutesAsleep": 384,
+                "totalSleepRecords": 1,
+                "totalTimeInBed": 462
+              }
+           }
           """.stripMargin
         println(s"decode=${decode[Sleep](json)}")
         val sleep = decode[Sleep](json).right.get

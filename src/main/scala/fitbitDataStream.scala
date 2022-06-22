@@ -233,6 +233,7 @@ class FitbitDataStream(fileName: String):
     def getActivityHeartIntradayDataSeries(targetDate: String, startTimeString: String, endTimeString: String) =
         val startDateTimeString = s"${targetDate}T${startTimeString}"
         val endDateTimeString = s"${targetDate}T${endTimeString}"
+        Logger.debug("start={}, end={}", startDateTimeString, endDateTimeString)
         //val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val heart = ActivityHeartTime(retJson)
