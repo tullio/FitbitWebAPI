@@ -3,6 +3,7 @@ import org.tinylog.Logger
 import com.github.psambit9791.jdsp.misc.{Plotting, UtilMethods}
 import scala.jdk.CollectionConverters._
 import com.github.nscala_time.time.Imports._
+import org.joda.time.Seconds
 import org.jetbrains.bio.npy._
 import java.nio.file.Paths
 import com.example.pf.DataStream
@@ -11,28 +12,40 @@ import com.example.pf.Tensor
 /***
   startTime, endTime: YYYY-MM-dd
  * **/
-@main def ActionDetection(startDate: String) =
+//@main def ActionDetection(startDate: String) =
+@main def ActionDetection() =
+    val prop = readProperties
+    val startDate = prop.get("StartDate").asInstanceOf[String]
+    val startTime = prop.get("StartTime").asInstanceOf[String]
+    val endDate = prop.get("EndDate").asInstanceOf[String]
+    val endTime = prop.get("EndTime").asInstanceOf[String]
     val npyFileName = s"pointCloud-${startDate}.npy"
-    val processStartDateObj = DateTime.parse(startDate)
+    val processStartDateObj = DateTime.parse(s"${startDate}T${startTime}")
+    val processEndDateObj = DateTime.parse(s"${endDate}T${endTime}")
+    val interval = new Interval(processStartDateObj, processEndDateObj)
     val fb = FitbitDataStream("src/main/resources/tetsu.sato.toml")
-    //val startDateTime = s"${startDate}T00:00"
-    //val endDateTime = s"${endDate}T00:00"
-    val startTime = "00:00"
+    //val startTime = "00:00"
     //val startTime = "18:00"
     //val endTime = "03:59"
-    val endTime = "23:59"
+    //val endTime = "23:59"
+    //val startDateTime = s"${startDate}T${startTime}"
+    //val endDateTime = s"${startDate}T${endTime}"
 
-    val duration = 5
+    val duration = interval.toDuration.getStandardDays.toInt + 1
     
     val pd = ArrayBuffer.empty[Double]
     for
         i <- 0 until duration
     do
-        val ds = DataStream()
+        val ds = DataStream(i)
         val startDateObj = processStartDateObj.plusDays(i)
+        val endDateObj = startDateObj.plusDays(1)
         val dataSeries = DataSeries(startDateObj)
         val startDate = f"${startDateObj.getYear}%04d-${startDateObj.getMonthOfYear}%02d-${startDateObj.getDayOfMonth}%02d"
         val heartRateData = fb.getActivityHeartIntradayDataSeries(startDate, startTime, endTime)
+        Logger.info(s"data length({})={}", startDateObj, heartRateData.length)
+        Logger.info(s"full length={}", calculateSeconds(startDateObj, endDateObj))
+        Logger.info(s"rate={}", heartRateData.length.toDouble/calculateSeconds(startDateObj, endDateObj).getSeconds)
         dataSeries.setHeartRateData(heartRateData)
         val sleepData = fb.getSleepDataSeries(startDate)
         dataSeries.setSleepData(sleepData)
@@ -152,3 +165,4 @@ def generateSampledStateStream(time: Tensor, data: Tensor, action: Array[Int], d
                                                 //Logger.debug("now, sampledTime={}", sampledTime)
                                                 sampledIndex += 1
     (sampledActionTime, sampledActionData)
+
