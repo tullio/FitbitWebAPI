@@ -22,6 +22,10 @@ class DataSeries(startDateTimeObj: DateTime):
     val avgYData = scala.collection.mutable.ArrayBuffer.empty[Double]
     val generatePNG = true
     var fig: Plotting = null
+    /**
+      * 心拍データをxData/yDataにセットする．completeTimeが計算されてセットされる．
+      * generatePNGがtrueなら，figも用意される．
+      * */
     def setHeartRateData(dataSeries: List[Either[String, Dataset]]) =
         val startDate = f"${startDateTimeObj.getMonthOfYear}%02d-${startDateTimeObj.getDayOfMonth}%02d"
         Logger.debug("startDate: {}", startDate)
@@ -47,7 +51,10 @@ class DataSeries(startDateTimeObj: DateTime):
             fig.addSignal("Heart Rate", xData.toDoubleArray, yData.toArray, false)
 
 //    def getHeartRateData =
-        
+    /**
+      * 睡眠データをsleepXData/sleepYDataにセットする．予めxData/yDataのセットが必要．
+      * generatePNGがtrueなら，figにデータを追加する．
+      * */
     def setSleepData(sleepData: Sleep) =
         Logger.debug("sleep: {}", sleepData.sleep.take(3).toSeq)
         if sleepData.sleep.length > 0 then
@@ -76,6 +83,13 @@ class DataSeries(startDateTimeObj: DateTime):
                     fig.addSignal("Sleep", sleepXData.toDoubleArray, sleepYData.toArray, false)
                 else
                     Logger.debug(s"Sleep: {}", "No data")
+    /**
+      * 運動時データをactiveXData/activeYDataにセットする．移動平均データもavgXData/avgYDataに
+      * セットされる．予めxData/yDataのセットが必要．
+      * generatePNGがtrueなら，figにデータを追加する．
+      * 移動平均データは現在は分析には使われていず，
+      * 参考としてグラフにプロットされるのみ．
+      * */
     def setActiveData(activeData: ActivityLog) =
         val avg = MovingAverage(60*10)
         Logger.debug("active: {}", activeData.activities(0).startTime)

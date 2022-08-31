@@ -324,7 +324,7 @@ class FitbitDataStream(fileName: String):
           mapdb.put("refreshToken", refreshToken)
           mapdb.close
         else
-          //println(res)
+          println(res)
           println("refresh failure")
     def generateHash(password: String) = 
         import java.security.MessageDigest
