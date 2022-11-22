@@ -229,6 +229,7 @@ class FitbitDataStream(fileName: String):
         @param targetDate target date string in the format yyyy-MM-dd
         @param startTimeString start time string in the format mm:ss
         @param endTimeString end time string in the format mm:ss
+        @return complemented: List[Either[String, Dataset]]
      **/
     def getActivityHeartIntradayDataSeries(targetDate: String, startTimeString: String, endTimeString: String) =
         val startDateTimeString = s"${targetDate}T${startTimeString}"
@@ -237,16 +238,18 @@ class FitbitDataStream(fileName: String):
         //val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val retJson = heartIntraday(targetDate, "1sec", startTimeString, endTimeString)
         val heart = ActivityHeartTime(retJson)
+        // case class Dataset(time: String,value: Long)
         val dataset = heart.`activities-heart-intraday`.dataset.toSeq
         val dataSeries = scala.collection.mutable.ArrayBuffer.empty[Long]
         val fmt = DateTimeFormat.forPattern("HH:mm:ss")
         val startDateTime = DateTime.parse(startDateTimeString)
         val endDateTime = DateTime.parse(endDateTimeString)
+        // startDateTime--endDateTimeのフルのHH:mm:ss
         val timeSeries = startDateTime.toInterval(endDateTime).toStringTimeSeries(fmt)
-        val complemented = timeSeries.map{f =>
+        val complemented = timeSeries.map{f => // f: "HH:mm:ss"
               val target = dataset.filter(g => g.time == f)
               target.length match
-                  case 0 => Left(f)
+                  case 0 => Left(f) // Seq[Dataset]の中に無かった
                   case 1 => Right(target(0))
                   case _ => Left("error")
           }

@@ -9,16 +9,22 @@ import java.nio.file.Paths
 import com.example.pf.DataStream
 import scala.collection.mutable.ArrayBuffer
 import com.example.pf.Tensor
+import better.files._
+import better.files.Dsl.mkdir
+
 /***
   startTime, endTime: YYYY-MM-dd
  * **/
 //@main def ActionDetection(startDate: String) =
 @main def ActionDetection() =
+    Logger.info("Start: {}", "start")
     val prop = readProperties
     val startDate = prop.get("StartDate").asInstanceOf[String]
     val startTime = prop.get("StartTime").asInstanceOf[String]
     val endDate = prop.get("EndDate").asInstanceOf[String]
     val endTime = prop.get("EndTime").asInstanceOf[String]
+    val detectWindowByMinutes = prop.get("DetectWindowByMinutes").asInstanceOf[Int]
+    val downSamplingWindowsBySeconds = prop.get("DownSamplingWindowBySeconds").asInstanceOf[Int]
     val npyFileName = s"pointCloud-${startDate}.npy"
     val processStartDateObj = DateTime.parse(s"${startDate}T${startTime}")
     val processEndDateObj = DateTime.parse(s"${endDate}T${endTime}")
@@ -40,74 +46,100 @@ import com.example.pf.Tensor
         val ds = DataStream(i)
         val startDateObj = processStartDateObj.plusDays(i)
         val endDateObj = startDateObj.plusDays(1)
+        /**
+          * */
         val dataSeries = DataSeries(startDateObj)
         val startDate = f"${startDateObj.getYear}%04d-${startDateObj.getMonthOfYear}%02d-${startDateObj.getDayOfMonth}%02d"
+        /**
+          * Data directory formed "yyyy-mm-dd"
+          * */
+        val currentDir = File(startDate)
+        if currentDir.exists then
+            currentDir.delete() // deletes children rucursively
+        mkdir(currentDir)
+        // endTimeを引数に取るが，24時間を基本としたい
         val heartRateData = fb.getActivityHeartIntradayDataSeries(startDate, startTime, endTime)
         Logger.info(s"data length({})={}", startDateObj, heartRateData.length)
         Logger.info(s"full length={}", calculateSeconds(startDateObj, endDateObj))
         Logger.info(s"rate={}", heartRateData.length.toDouble/calculateSeconds(startDateObj, endDateObj).getSeconds)
+        // dataSeries.xData/yDataに欠損値有り生データをセット
         dataSeries.setHeartRateData(heartRateData)
-        val sleepData = fb.getSleepDataSeries(startDate)
+        val sleepData = fb.getSleepDataSeries(startDate) // 欠損値あり生データのはず
+        // dataSeries.sleepXData/sleepYDataに欠損値有り生データをセット
+        // 睡眠期間は補間されるけど，xData/yDataからピックアップするので
+        // 結局欠損値有り生データになる
         dataSeries.setSleepData(sleepData)
 
+        // 睡眠データと同じような処理
         val activeData = fb.getActivityLogList(startDate)
         dataSeries.setActiveData(activeData)
 
-        dataSeries.saveAsPNG(s"heartrate-${startDate}.png")
-        val heartRatePD = getHeartRatePointCloud(dataSeries, i.toDouble)
-        pd ++= heartRatePD
+        dataSeries.saveAsPNG(s"${currentDir}/heartrate-${startDate}.png")
+        //val heartRatePD = getHeartRatePointCloud(dataSeries, i.toDouble)
+        //pd ++= heartRatePD
 
         ds.timeDataStream.multiplePush(dataSeries.xData.toArray, dataSeries.yData.toArray)
         ds.completeTimeSeries = Tensor(dataSeries.completeTime)
         Logger.debug("completeTimeSeries={}", ds.completeTimeSeries.take(3))
         Logger.debug("completeTimeSeries.length={}", ds.completeTimeSeries.length)
-        ds.tuning
+        // ds.timePredictStream/timeParticleStreamにセット
+        ds.tuning // 欠損値無しになる
         //val sampledPredictionData = ds.timePredictStreamSampling(60*10)
-        val sampledPredictionData = ds.timePredictStreamSampling(15)
+        // (max, min)を取るので，データは1/15*2になる
+        val sampledPredictionData = ds.timePredictStreamSampling(downSamplingWindowsBySeconds)
         val sampleSize = sampledPredictionData.time.length
         ds.timeStateStream.multiplePush(sampledPredictionData.time, Tensor.repeat(Tensor(0.0), sampleSize.toInt))
         if dataSeries.sleepXData.length > 0 then
+            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sleep-${startDate}.npy"), 
+                          dataSeries.sleepXData.map(f => f.toDouble).toArray ++
+                          dataSeries.sleepYData.toArray   ,
+              Array(2, dataSeries.sleepXData.length.toInt))
             val sleepIter = dataSeries.sleepXData.iterator
             val sampledTimeIter = sampledPredictionData.time.tensorIterator
             val (sampledSleepTime, sampledSleepData) = generateSampledStateStream(sampledPredictionData.time, sampledPredictionData.data, 
                                        dataSeries.sleepXData.toArray, ds, 1.0)
-            NpyFile.write(Paths.get(s"heartrate-sampled-sleep-${startDate}.npy"), 
+            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-sleep-${startDate}.npy"), 
                  sampledSleepTime.map(f => f.toDouble).toArray ++ 
                        sampledSleepData.getColumn(0).toArray ++
                        sampledSleepData.getColumn(1).toArray,
               Array(3, sampledSleepTime.length.toInt))
         if dataSeries.activeXData.length > 0 then
+            NpyFile.write(Paths.get(s"${currentDir}/heartrate-active-${startDate}.npy"), 
+                          dataSeries.activeXData.map(f => f.toDouble).toArray ++
+                          dataSeries.activeYData.toArray   ,
+              Array(2, dataSeries.activeXData.length.toInt))
+
             val activeIter = dataSeries.activeXData.iterator
             val sampledTimeIter = sampledPredictionData.time.tensorIterator
             val (sampledActiveTime, sampledActiveData) = generateSampledStateStream(sampledPredictionData.time, sampledPredictionData.data,
                                        dataSeries.activeXData.toArray, ds, 2.0)
-            NpyFile.write(Paths.get(s"heartrate-sampled-active-${startDate}.npy"), 
+            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-active-${startDate}.npy"), 
                  sampledActiveTime.map(f => f.toDouble).toArray ++ 
                           sampledActiveData.getColumn(0).toArray ++
                           sampledActiveData.getColumn(1).toArray   ,
               Array(3, sampledActiveTime.length.toInt))
                                        
-        NpyFile.write(Paths.get(s"heartrate-pf-${startDate}.npy"), 
+        NpyFile.write(Paths.get(s"${currentDir}/heartrate-pf-${startDate}.npy"), 
               ds.timePredictStream.time.toArray.zip(ds.timePredictStream.data.toArray)
                 .foldLeft(ArrayBuffer.empty[Double])((g, h) => g ++ Array(h._1, h._2)).toArray,
               Array(2, ds.timePredictStream.time.length.toInt))
         //NpyFile.write(Paths.get(s"heartrate-pd-${startDate}.npy"), pd.toArray, Array(pd.length/3, 3))
-        NpyFile.write(Paths.get(s"heartrate-pd-${startDate}.npy"), 
+        NpyFile.write(Paths.get(s"${currentDir}/heartrate-pd-${startDate}.npy"), 
                               dataSeries.xData.toArray.map(f => f.toDouble) ++
                               dataSeries.yData.toArray ++
                               Array.fill(dataSeries.xData.length)(i.toDouble)
                               , Array(3, dataSeries.xData.length))
-        NpyFile.write(Paths.get(s"heartrate-sampled-pf-${startDate}.npy"), 
+        NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-pf-${startDate}.npy"), 
                               (sampledPredictionData.time.toArray ++
                                sampledPredictionData.data.getColumn(0).toArray ++
                                sampledPredictionData.data.getColumn(1).toArray ), 
                                Array(3, sampledPredictionData.time.length.toInt))
-        NpyFile.write(Paths.get(s"heartrate-sampledstate-pf-${startDate}.npy"), 
+        NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampledstate-pf-${startDate}.npy"), 
                               (ds.timeStateStream.time.toArray ++
                                ds.timeStateStream.data.toArray), 
                                Array(2, ds.timeStateStream.time.length.toInt))
 
-
+    Logger.info("End: {}", "end")
     
 
 def getHeartRatePointCloud(dataSeries: DataSeries, z: Double) =
@@ -117,6 +149,14 @@ def getHeartRatePointCloud(dataSeries: DataSeries, z: Double) =
     }
     pd.toArray
 
+/**
+  * ダウンサンプリングした秒データの中から，アクション秒データの間にあるデータをピックアップした
+  * ダウサンプリングアクションデータを作る．
+  * ダウンサンプリングデータからピックアップするので，データは(max, min)のペアとなる
+  * @args time ダウンサンプリングした秒データ
+  * @args data ダウンサンプリングした心拍データ
+  * @args action 対象アクションの生データ秒データ
+  * */
 def generateSampledStateStream(time: Tensor, data: Tensor, action: Array[Int], ds: DataStream, id: Double) =
     //Logger.debug("data shape={}([:, 1] or [:, 2]?)", data.shape.toSeq)
     //Logger.debug("data {}", data)

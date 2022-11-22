@@ -47,9 +47,3 @@ case class activitiesHeartIntraday(
 object activitiesHeartIntraday:
   implicit val decoder: Decoder[activitiesHeartIntraday] = deriveDecoder
 
-case class Dataset(
-    time: String,
-    value: Long
-    )
-object Dataset:
-  implicit val decoder: Decoder[Dataset] = deriveDecoder

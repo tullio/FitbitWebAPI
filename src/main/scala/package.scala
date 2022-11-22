@@ -26,6 +26,7 @@ def readProperties =
     if params == null then 
        Logger.debug("params is null({}). try to read configuration...", params)
        val prop = scala.sys.props.get("property.file")    
+       Logger.debug("prop={}", prop)
        val tomlParser = TomlParser() 
         params = prop match
             case Some(filename) =>

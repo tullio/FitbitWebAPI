@@ -38,8 +38,11 @@ class DataSeries(startDateTimeObj: DateTime):
         Logger.debug("ActionDetection: {}", dataSeries.take(3))
         if generatePNG then
             fig.initialisePlot
+        // dataSeriesも↓こんな感じにcomplementedされている
+        // timeSeries = startDateTime.toInterval(endDateTime).toStringTimeSeries(fmt)
+        // というかdataSeriesの個数でtimeを作っているので，数は必ず一致する
         time.zip(dataSeries).foreach{f =>
-           if f._2.isRight then
+           if f._2.isRight then // 欠損してなくてデータが入ってたら取り出す
                val value
                  = f._2 match
                        case Right(dataset) => dataset.value.toDouble
@@ -129,9 +132,9 @@ class DataSeries(startDateTimeObj: DateTime):
                     activeXData += f._1
                     activeYData += f._2
                     avgOverPeriod += 1
-                avg += f._2
-                avgXData += f._1
-                avgYData += avg.value
+                    avg += f._2
+                    avgXData += f._1
+                    avgYData += avg.value
         }
         Logger.debug("avgOverPeriod:{}", avgOverPeriod)
         if generatePNG then
