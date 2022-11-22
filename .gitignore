@@ -1,2 +1,6 @@
 *.class
 *.log
+*.png
+*.npy
+*.csv
+*.pdgm
