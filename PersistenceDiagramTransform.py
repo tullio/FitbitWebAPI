@@ -5,11 +5,15 @@ import plotly.graph_objects as go  # これも3次元可視化用
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import glob
 import toml
 import datetime
 from logging import getLogger
 from logging import Formatter, StreamHandler, FileHandler, DEBUG, INFO
 import pickle
+import re
+from sklearn.cluster import AgglomerativeClustering
+from operator import itemgetter 
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 RESET_SEQ = "\033[0m"
@@ -66,6 +70,8 @@ def FIP(f, g):
     fip = np.dot(f.ravel(), g.ravel())
     return fip
 def JFIP(f, g):
+    f = np.cov(f)
+    g = np.cov(g)
     jfip = 2*FIP(f, g)/(FIP(f, f)+FIP(g, g))
     return jfip
 
@@ -100,12 +106,14 @@ def load_daily_data(basename):
     #print("duration(should be 5)", duration)
     base_filename = "{}-{:04d}-{:02d}".format(basename, year, month)
     interval_range = range(day, day + duration)
+    logger.debug("interval_range=%s", interval_range)
     pcs = np.empty((0, 4))
     index = 0
     # Plan A
-    """
+
     for i in interval_range:
-        filename = "{}-{:02d}.npy".format(base_filename, i)
+        dir_name = "{:04d}-{:02d}-{:02d}".format(year, month, i)
+        filename = "{}/{}-{:02d}.npy".format(dir_name, base_filename, i)
         print(filename)
         if os.path.exists(filename):
             pc=np.load(filename).T
@@ -114,6 +122,7 @@ def load_daily_data(basename):
             #print(z)
             pcs = np.append(pcs, np.insert(pc, 3, z, axis=1) , axis=0)
         index += 1
+
     """
     # Plan B 時間遅れ埋込
     for i in interval_range:
@@ -136,6 +145,7 @@ def load_daily_data(basename):
             day_offset = (i - day) * 60*60*24
             pc1[:, 0] = pc1[:, 0] + day_offset
             pcs = np.append(pcs, pc1 , axis=0)
+    """
     return pcs
 
 def get_pd(base_name, pcs):
@@ -156,6 +166,20 @@ def get_pd(base_name, pcs):
     #print("histogram", pd1.histogram())
     #print("pair", pd1.pairs())
     return pd1
+def get_hist(arr, bins=50, filename="figure.png", title="", binarization = False):
+    #logger.debug("bins=%d", bins)
+    #if binarize:
+    #    arr = binarize(arr, 0.001)
+    H, xedges, yedges = np.histogram2d(arr[:, 0], arr[:, 1], bins=bins, density=False)
+    if binarize:
+        H = binarize(H, 0.001)
+    plt.imshow(H.T, origin="lower", interpolation='nearest', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap="tab20")
+    plt.title(title)
+    #logger.debug("filename=%s", filename)
+    plt.savefig(filename, dpi=96)
+    if is_env_notebook():
+        plt.show()
+    return H
 
 def get_pdarray(pd):
     #print("pd", list(filter(lambda x: x.death_time()<1.2, pd.pairs())))
@@ -176,7 +200,7 @@ def draw_pcs(title, base_name, pcs):
 
     if is_env_notebook():
         fig.show()
-    fig.write_image("{}-pc.png".format(base_name))
+    fig.write_image("{}.png".format(base_name))
 
 def draw_pd(title, base_name, pd):
     #pd.histogram().plot()
@@ -206,7 +230,10 @@ def draw_pd(title, base_name, pd):
     )
     fig.update_xaxes(range=axisrange)
     fig.update_yaxes(range=axisrange)
-    fig.write_image("{}-pd.png".format(base_name))
+    fig.update_layout(title=title)
+    if is_env_notebook():
+        fig.show()
+    fig.write_image("{}.png".format(base_name))
 
 #target = "sleep"
 def draw_pcpd(target, pcs):
@@ -216,16 +243,20 @@ def draw_pcpd(target, pcs):
     #pcs_max=pcs[:, (0, 1, 3)]
     time_range = (int(pcs[:, 0].min()), int(pcs[:, 0].max()))
     start_index = time_range[0]
+    day = start_index // (60*60*24)
+    target_date = start_date + datetime.timedelta(days=day)
     #index_to_time(start_index, detect_window)
     #split_pc = pcs_max[(pcs_max[:, 0] >= start_index) & (pcs_max[:, 0] < start_index + detect_window)]
     # save_pcpdpng("sleep", split_pc, base_name, start_index)
     #target = "sleep"
     #  save_pcpdpng
-    title_string = "{} data-{}".format(target, start_index)
-    filename = "{}-pc-{}".format(target, start_index)
+    title_string = "{} pc-{}".format(target, start_index)
+    #dir_name = "{:04d}-{:02d}-{:02d}".format(year, month, i)
+    dir_name = target_date.strftime("%Y-%m-%d")
+    filename = "{}/{}-pc-{}".format(dir_name, target, start_index)
     np.save(filename, pcs)
-    filename = "{}-{}".format(base_name, start_index)
-    #draw_pcs(title_string, filename, split_pc)
+    filename = "{}/{}-pc-{}".format(dir_name, base_name, start_index)
+    draw_pcs(title_string, filename, pcs)
     from plotly.subplots import make_subplots
     fig = make_subplots(rows=1, cols=2,
                        specs=[[{"type": "scene", "b": 0.1}, {"type": "xy"}]],
@@ -248,9 +279,16 @@ def draw_pcpd(target, pcs):
 
     pd1 = get_pd("{}pcs".format(target), pcs)
     pdarray = get_pdarray(pd1)
-    filename = "{}-pdarray-{}".format(target, start_index)
+    filename = "{}/{}-pd-{}".format(dir_name, base_name, start_index)
     np.save(filename, pdarray)
-    #draw_pd(title_string, filename, pd1)
+    title_string = "{} pd-{}".format(target, start_index)
+    draw_pd(title_string, filename, pd1)
+    title = "{} sampled-pf-pd-histogram({})".format(target_date.strftime("%Y/%m/%d"), start_index)
+    filename = "{}/{}-hist-{}.png".format(dir_name, base_name, start_index)
+    hist = get_hist(pdarray, title = title, filename = filename)
+    filename = "{}/{}-hist-{}".format(dir_name, target, start_index)
+    np.save(filename, hist)
+
 
     values = pd1.birth_death_times()
     xmin = values[0].min()
@@ -273,7 +311,7 @@ def draw_pcpd(target, pcs):
     fig.update_yaxes(range=axisrange, row=1, col=2)
     if is_env_notebook():
         fig.show()
-    fig.write_image("{}-pcpd-{}.png".format(base_name, start_index))
+    fig.write_image("{}/{}-pcpd-{}.png".format(dir_name, base_name, start_index))
 
 
 def save_pcpdpng(target, split_pc, base_name, start_index):
@@ -317,8 +355,10 @@ def create_sleep_dataset():
         #np.set_printoptions(threshold=np.inf, suppress=True)
         #logger.debug("slplitted-%d=%s", start_index, split_pc)
         logger.debug("splitted-pc-%d.shape=%s", start_index, split_pc.shape)
+        zindex = np.unique(split_pc[:, 2])
         #save_pcpdpng("sleep", split_pc, base_name, start_index)
-        if len(split_pc) > 0:
+        #if len(split_pc) > 0: # JSIAM
+        if len(split_pc) > 90 and len(zindex) == interval.days + 1: # FIT
             draw_pcpd("sleep", split_pc)
             num_sleep_dataset += 1
         #return sleeppd1    
@@ -346,19 +386,19 @@ def create_active_dataset():
         #np.set_printoptions(threshold=np.inf, suppress=True)
         logger.debug("slplitted-%d=%s", start_index, split_pc)
         logger.debug("slplitted.shape=%s", split_pc.shape)
+        zindex = np.unique(split_pc[:, 2])
         #save_pcpdpng("active", split_pc, base_name, start_index)
-        if len(split_pc) > 0:
+        #if len(split_pc) > 0: # JSIAM
+        if len(split_pc) > 90 and len(zindex) == interval.days + 1: # FIT
             draw_pcpd("active", split_pc)
             num_active_dataset += 1
     logger.info("collected active dataset = %d", num_active_dataset)
-    #activetmppd1 = get_pd("activetmp", activetmp)
 
-    #draw_pd("Active data", base_name, activetmppd1)
-    #pdarray = get_pdarray(activetmppd1)
-    #logger.debug("save??=%s", pdarray.__class__.__name__)
-    #np.save("active-pdarray", pdarray)
-    #print("save active-pdarray", pdarray.shape)
-    #return activetmppd1
+def date_range(start, stop, step = datetime.timedelta(1)):
+    current = start
+    while current < stop:
+        yield current
+        current += step
 
 def create_test_data():
     base_name = "heartrate-sampled-pf"
@@ -367,24 +407,27 @@ def create_test_data():
     testpcs_max=testpcs[:, (0, 1, 3)]
     testpcs_min=testpcs[:, (0, 2, 3)]
 
-    num_active_dataset = 0
+    num_test_dataset = 0
     logger.debug("testpcs_max=%s",testpcs_max[40000:47000, :])
-    #activetmp=activepcs_max[(activepcs_max[:, 0] > 72195) & (activepcs_max[:, 0] < (72195+120*2))]
-    #activetmp=activepcs_max[(activepcs_max[:, 0] > 72195) & (activepcs_max[:, 0] < (72195+60*30))]
-    target_window = "2022-6-6 13:00"
-    target_window = datetime.datetime.strptime(target_window, "%Y-%m-%d %H:%M")
-    logger.debug("target_window = %s", target_window)
-    index = time_to_index(target_window)
-    #time_range = (int(activepcs_max[:, 0].min()), int(activepcs_max[:, 0].max()))
-    logger.debug("target window by index=(%d, %d)", index, index + detect_window)
-    #target_pc = testpcs_max[index - 1000: index + detect_window_by_index + 1000, :]
-    target_pc = testpcs_max[(testpcs_max[:, 0] > index) & (testpcs_max[:, 0] < (index+detect_window))]
-    logger.debug("target_pc=%s", target_pc.shape)
-    #draw_pcs("Active data", base_name, activetmp)
-    draw_pcs("Test data", base_name, target_pc)
-    if len(target_pc) > 0:
-            draw_pcpd("test", target_pc)
-
+    #for target_date in date_range(start_date, end_date + datetime.timedelta(1)): # JSIAM
+    for target_date in date_range(start_date, start_date + datetime.timedelta(1)): # FIT
+        target_window = target_date.replace(hour=14, minute=0, second=0)
+        duration = 9
+        logger.debug("target_window = %s", target_window)
+        start_index = time_to_index(target_window)
+        for index in range(start_index, start_index + duration*detect_window, detect_window):
+            index_to_time(index, detect_window)
+            logger.debug("target window by index=(%d, %d)", index, index + detect_window)
+            #target_pc = testpcs_max[index - 1000: index + detect_window_by_index + 1000, :]
+            target_pc = testpcs_max[(testpcs_max[:, 0] > index) & (testpcs_max[:, 0] < (index+detect_window))]
+            logger.debug("target_pc=%s", target_pc.shape)
+            zindex = np.unique(target_pc[:, 2])
+            #draw_pcs("Active data", base_name, activetmp)
+            #if len(target_pc) > 0: # JSIAM
+            if len(target_pc) > 90 and len(zindex) == interval.days + 1: # FIT
+                draw_pcs("Test data", base_name, target_pc)
+                draw_pcpd("test", target_pc)
+                num_test_dataset += 1
 
 def index_to_time_string(index):
     day = index // (60*60*24)
@@ -407,12 +450,98 @@ def time_to_index(datetime):
     second = datetime.second
     index = day * (60*60*24) + hour * 60*60 + minute * 60 + second
     return index
+def binarize(arr, thresh):
+    arr[arr<thresh] = 0
+    arr[arr>=thresh] = 1
+    return arr
+
+def create_simirarity_matrix(l):
+    dir_name = start_date.strftime("%Y-%m-%d")
+    #base_name = "heartrate-sampled-{}".format(target)
+    #l = glob.glob("{}/sleep-hist-*.npy".format(dir_name))
+    #l += glob.glob("{}/test-hist-*.npy".format(dir_name))
+    #l += glob.glob("{}/active-hist-*.npy".format(dir_name))
+    simmatrix = np.zeros((len(l), len(l)))
+    for i in range(len(l)):
+        target1 = np.load(l[i])
+        for j in range(len(l)):
+            target2 = np.load(l[j])
+
+            #target1 = binarize(target1, 0.001)
+            #target2 = binarize(target2, 0.001)
+            sim = JFIP(target1, target2)
+            simmatrix[i][j] = sim
+    print(simmatrix)
+    plt.imshow(simmatrix)
+    title = "{} sampled-pf-pd-histogram-simmatrix".format(start_date.strftime("%Y/%m/%d"))
+    filename = "{}/simmatrix.png".format(dir_name)
+    plt.title(title)
+    plt.savefig(filename, dpi=96)
+
+def get_clustering_target(target, topn_labels=10, topn_clusters=2, reverse=True):
+    dir_name = start_date.strftime("%Y-%m-%d")
+    print("target", target)
+    l = glob.glob("{}/{}-hist-*.npy".format(dir_name, target))
+    print("original files", l)
+    simmatrix = np.zeros((len(l), len(l)))
+    for i in range(len(l)):
+        target1 = np.load(l[i])
+        for j in range(len(l)):
+            target2 = np.load(l[j])
+
+            #target1 = binarize(target1, 0.001)
+            #target2 = binarize(target2, 0.001)
+            sim = JFIP(target1, target2)
+            simmatrix[i][j] = 1.0 - sim
+    model = AgglomerativeClustering(affinity="precomputed", linkage="complete", n_clusters=5).fit(simmatrix)
+    print("cluster", model.labels_)
+    # [(0, 1), (2, 2)]
+    labels, counts = np.unique(model.labels_, return_counts = True)
+    # [(0, 2), (1, 2)]
+    counted_labels = sorted(zip(labels, counts), key=itemgetter(1), reverse=reverse)
+    print("sorted counted labels", counted_labels)
+    target_clusters = counted_labels[:topn_clusters]
+    print("target_clusters", target_clusters)
+    target_files = []
+    for i in target_clusters:
+        for j, label in enumerate(model.labels_):
+            if i[0] == label:
+                target_files.append(l[j])
+    return target_files[:topn_labels]
 
 def create_supervised_data():
     create_sleep_dataset()
     create_active_dataset()
 
+def set_histogram_bins(bins=10):
+    for target_date in date_range(start_date, end_date + datetime.timedelta(1)):
+        for target in ["sleep", "test", "active"]:
+            base_name = "heartrate-sampled-{}".format(target)
+            logger.info(target)
+            dir_name = target_date.strftime("%Y-%m-%d")
+            filename = "{}/heartrate-sampled-{}-pd-*.npy".format(dir_name, target)
+            #logger.debug(filename)
+            l = glob.glob(filename)
+            logger.debug(l)
+            for f in l:
+                index = re.findall("{}/heartrate-sampled-{}-pd-(.*).npy".format(dir_name, target), f)[0]
+                pd = np.load(f)
+                title = "{} sampled-{}-pd-histogram({})".format(target_date.strftime("%Y/%m/%d"), target, index)
+                filename = "{}/{}-hist-{}.png".format(dir_name, base_name, index)
+                logger.debug(filename)
+                hist = get_hist(pd, title = title, filename = filename, bins = bins, binarization = False)
+                filename = "{}/{}-hist-{}".format(dir_name, base_name, index)
+                np.save(filename, hist)
+
+
 if __name__ == '__main__':
-    create_supervised_data()
-    create_test_data()
+    #create_supervised_data()
+    #create_test_data()
+    #set_histogram_bins(bins=50)
+    l = get_clustering_target("sleep", topn_clusters=2, topn_labels=5)
+    l += get_clustering_target("test", topn_clusters=3, topn_labels=5)
+    l += get_clustering_target("active", topn_clusters=5, topn_labels=5)
+    #unsleep = get_clustering_target("sleep", reverse=False)
+    #logger.debug(unsleep)
+    create_simirarity_matrix(l)
     logger.close()
