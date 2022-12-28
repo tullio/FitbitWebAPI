@@ -18,6 +18,7 @@ import better.files.Dsl.mkdir
 //@main def ActionDetection(startDate: String) =
 @main def ActionDetection() =
     Logger.info("Start: {}", "start")
+/*
     val prop = readProperties
     val startDate = prop.get("StartDate").asInstanceOf[String]
     val startTime = prop.get("StartTime").asInstanceOf[String]
@@ -29,27 +30,24 @@ import better.files.Dsl.mkdir
     val processStartDateObj = DateTime.parse(s"${startDate}T${startTime}")
     val processEndDateObj = DateTime.parse(s"${endDate}T${endTime}")
     val interval = new Interval(processStartDateObj, processEndDateObj)
+ */
     val fb = FitbitDataStream("src/main/resources/tetsu.sato.toml")
-    //val startTime = "00:00"
-    //val startTime = "18:00"
-    //val endTime = "03:59"
-    //val endTime = "23:59"
-    //val startDateTime = s"${startDate}T${startTime}"
-    //val endDateTime = s"${startDate}T${endTime}"
 
-    val duration = interval.toDuration.getStandardDays.toInt + 1
+    //val duration = interval.toDuration.getStandardDays.toInt + 1
     
     val pd = ArrayBuffer.empty[Double]
     for
-        i <- 0 until duration
+        i <- 0 until Property.duration
     do
+        Logger.tags("NOTICE", "INFO").info("Loop {} start.", i)
         val ds = DataStream(i)
-        val startDateObj = processStartDateObj.plusDays(i)
+        val startDateObj = Property.processStartDateObj.plusDays(i)
         val endDateObj = startDateObj.plusDays(1)
         /**
           * */
         val dataSeries = DataSeries(startDateObj)
         val startDate = f"${startDateObj.getYear}%04d-${startDateObj.getMonthOfYear}%02d-${startDateObj.getDayOfMonth}%02d"
+        Logger.tags("NOTICE", "INFO").info("Creating directory {}...", startDate)
         /**
           * Data directory formed "yyyy-mm-dd"
           * */
@@ -57,13 +55,15 @@ import better.files.Dsl.mkdir
         if currentDir.exists then
             currentDir.delete() // deletes children rucursively
         mkdir(currentDir)
+        Logger.tags("NOTICE", "INFO").info("Getting data via API...", "")
         // endTimeを引数に取るが，24時間を基本としたい
-        val heartRateData = fb.getActivityHeartIntradayDataSeries(startDate, startTime, endTime)
-        Logger.info(s"data length({})={}", startDateObj, heartRateData.length)
+        val heartRateData = fb.getActivityHeartIntradayDataSeries(startDate, Property.startTimeStr, Property.endTimeStr)
+        Logger.tags("NOTICE", "INFO").info(s"data length({})={}", startDateObj, heartRateData.length)
         Logger.info(s"full length={}", calculateSeconds(startDateObj, endDateObj))
         Logger.info(s"rate={}", heartRateData.length.toDouble/calculateSeconds(startDateObj, endDateObj).getSeconds)
         // dataSeries.xData/yDataに欠損値有り生データをセット
         dataSeries.setHeartRateData(heartRateData)
+        Logger.tags("NOTICE", "INFO").info("Getting sleep via API...", "")
         val sleepData = fb.getSleepDataSeries(startDate) // 欠損値あり生データのはず
         // dataSeries.sleepXData/sleepYDataに欠損値有り生データをセット
         // 睡眠期間は補間されるけど，xData/yDataからピックアップするので
@@ -71,6 +71,7 @@ import better.files.Dsl.mkdir
         dataSeries.setSleepData(sleepData)
 
         // 睡眠データと同じような処理
+        Logger.tags("NOTICE", "INFO").info("Getting active via API...", "")
         val activeData = fb.getActivityLogList(startDate)
         dataSeries.setActiveData(activeData)
 
@@ -83,62 +84,82 @@ import better.files.Dsl.mkdir
         Logger.debug("completeTimeSeries={}", ds.completeTimeSeries.take(3))
         Logger.debug("completeTimeSeries.length={}", ds.completeTimeSeries.length)
         // ds.timePredictStream/timeParticleStreamにセット
+        Logger.tags("NOTICE", "INFO").info("Start tuning...", "")
         ds.tuning // 欠損値無しになる
+        Logger.tags("NOTICE", "INFO").info("End tuning...", "")
         //val sampledPredictionData = ds.timePredictStreamSampling(60*10)
         // (max, min)を取るので，データは1/15*2になる
-        val sampledPredictionData = ds.timePredictStreamSampling(downSamplingWindowsBySeconds)
+        Logger.tags("NOTICE", "INFO").info("Start sampling...", "")
+        val sampledPredictionData = ds.timePredictStreamSampling(Property.downSamplingWindowsBySeconds)
+        Logger.tags("NOTICE", "INFO").info("End sampling...", "")
         val sampleSize = sampledPredictionData.time.length
         ds.timeStateStream.multiplePush(sampledPredictionData.time, Tensor.repeat(Tensor(0.0), sampleSize.toInt))
+        Logger.tags("NOTICE", "INFO").info("Writing numpy file...", "")
         if dataSeries.sleepXData.length > 0 then
-            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sleep-${startDate}.npy"), 
+            var filename = s"${currentDir}/heartrate-sleep-${startDate}.npy"
+            NpyFile.write(Paths.get(filename), 
                           dataSeries.sleepXData.map(f => f.toDouble).toArray ++
                           dataSeries.sleepYData.toArray   ,
               Array(2, dataSeries.sleepXData.length.toInt))
+            Logger.tags("NOTICE", "INFO").info("{} done.", filename)
             val sleepIter = dataSeries.sleepXData.iterator
             val sampledTimeIter = sampledPredictionData.time.tensorIterator
             val (sampledSleepTime, sampledSleepData) = generateSampledStateStream(sampledPredictionData.time, sampledPredictionData.data, 
                                        dataSeries.sleepXData.toArray, ds, 1.0)
-            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-sleep-${startDate}.npy"), 
+            filename = s"${currentDir}/heartrate-sampled-sleep-${startDate}.npy"
+            NpyFile.write(Paths.get(filename), 
                  sampledSleepTime.map(f => f.toDouble).toArray ++ 
                        sampledSleepData.getColumn(0).toArray ++
                        sampledSleepData.getColumn(1).toArray,
               Array(3, sampledSleepTime.length.toInt))
+            Logger.tags("NOTICE", "INFO").info("{} done.", filename)
         if dataSeries.activeXData.length > 0 then
-            NpyFile.write(Paths.get(s"${currentDir}/heartrate-active-${startDate}.npy"), 
+            var filename = s"${currentDir}/heartrate-active-${startDate}.npy"
+            NpyFile.write(Paths.get(filename), 
                           dataSeries.activeXData.map(f => f.toDouble).toArray ++
                           dataSeries.activeYData.toArray   ,
               Array(2, dataSeries.activeXData.length.toInt))
-
+            Logger.tags("NOTICE", "INFO").info("{} done.", filename)
             val activeIter = dataSeries.activeXData.iterator
             val sampledTimeIter = sampledPredictionData.time.tensorIterator
             val (sampledActiveTime, sampledActiveData) = generateSampledStateStream(sampledPredictionData.time, sampledPredictionData.data,
                                        dataSeries.activeXData.toArray, ds, 2.0)
-            NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-active-${startDate}.npy"), 
+            filename = s"${currentDir}/heartrate-sampled-active-${startDate}.npy"
+            NpyFile.write(Paths.get(filename), 
                  sampledActiveTime.map(f => f.toDouble).toArray ++ 
                           sampledActiveData.getColumn(0).toArray ++
                           sampledActiveData.getColumn(1).toArray   ,
               Array(3, sampledActiveTime.length.toInt))
+            Logger.tags("NOTICE", "INFO").info("{} done.", filename)
                                        
-        NpyFile.write(Paths.get(s"${currentDir}/heartrate-pf-${startDate}.npy"), 
+        var filename = s"${currentDir}/heartrate-pf-${startDate}.npy"
+        NpyFile.write(Paths.get(filename), 
               ds.timePredictStream.time.toArray.zip(ds.timePredictStream.data.toArray)
                 .foldLeft(ArrayBuffer.empty[Double])((g, h) => g ++ Array(h._1, h._2)).toArray,
               Array(2, ds.timePredictStream.time.length.toInt))
+        Logger.tags("NOTICE", "INFO").info("{} done.", filename)
         //NpyFile.write(Paths.get(s"heartrate-pd-${startDate}.npy"), pd.toArray, Array(pd.length/3, 3))
-        NpyFile.write(Paths.get(s"${currentDir}/heartrate-pd-${startDate}.npy"), 
+        filename = s"${currentDir}/heartrate-pd-${startDate}.npy"
+        NpyFile.write(Paths.get(filename), 
                               dataSeries.xData.toArray.map(f => f.toDouble) ++
                               dataSeries.yData.toArray ++
                               Array.fill(dataSeries.xData.length)(i.toDouble)
                               , Array(3, dataSeries.xData.length))
-        NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampled-pf-${startDate}.npy"), 
+        Logger.tags("NOTICE", "INFO").info("{} done.", filename)
+        filename = s"${currentDir}/heartrate-sampled-pf-${startDate}.npy"
+        NpyFile.write(Paths.get(filename), 
                               (sampledPredictionData.time.toArray ++
                                sampledPredictionData.data.getColumn(0).toArray ++
                                sampledPredictionData.data.getColumn(1).toArray ), 
                                Array(3, sampledPredictionData.time.length.toInt))
-        NpyFile.write(Paths.get(s"${currentDir}/heartrate-sampledstate-pf-${startDate}.npy"), 
+        Logger.tags("NOTICE", "INFO").info("{} done.", filename)
+        filename = s"${currentDir}/heartrate-sampledstate-pf-${startDate}.npy"
+        NpyFile.write(Paths.get(filename), 
                               (ds.timeStateStream.time.toArray ++
                                ds.timeStateStream.data.toArray), 
                                Array(2, ds.timeStateStream.time.length.toInt))
-
+        Logger.tags("NOTICE", "INFO").info("{} done.", filename)
+        Logger.tags("NOTICE", "INFO").info("Writing numpy file...end", "")
     Logger.info("End: {}", "end")
     
 
