@@ -50,7 +50,6 @@ class FitbitDataStreamSpec extends AnyFunSuite:
         val fb = FitbitDataStream("src/main/resources/tetsu.sato.toml")
         assert(fb != null) 
         val ret = fb.sleep("2022-04-04")
-        //println(ret)
     }
     test("sleep should obtain sleep data between two dates"){
         val fb = FitbitDataStream("src/main/resources/tetsu.sato.toml")
@@ -210,10 +209,11 @@ class FitbitDataStreamSpec extends AnyFunSuite:
 
           }
   * */          
-        val dataSeries = fb.getActivityHeartIntradayDataSeries(targetDate, startTimeString, endTimeString)
-
+        val dataSeries = fb.getActivityHeartIntradayDataSeries(targetDate, startTimeString, endTimeString).take(10).takeRight(3)
+        assert(dataSeries == List(Left("00:00:07"), Right(Dataset("00:00:08",91)), Left("00:00:09")))
         //val ui = new UI
         //ui.flush(dataSeries.toArray)
+    /**
         val width = 600
         val height = 500
         val title = "Heart Rate"
@@ -238,6 +238,7 @@ class FitbitDataStreamSpec extends AnyFunSuite:
         fig2.addSignal("FFT", time, out, true)
         fig2.plot
         //println(out.toSeq)
+      * */
     }
 
     test("access token should be introspected"){
@@ -272,4 +273,24 @@ class FitbitDataStreamSpec extends AnyFunSuite:
         Logger.debug("ret={}",ret)
         Logger.debug("startTime={}", ret.activities(1))
         Logger.debug("originalStartTime={}", ret.activities(1).originalStartTime)
+    }
+    test("getSleepDataSeries should obtain detailed sleep data"){
+        val fb = FitbitDataStream("src/main/resources/tetsu.sato.toml")
+        assert(fb != null) 
+        val targetDate = "2022-04-01"
+        val startTimeString = "19:30"
+        val endTimeString = "20:30"
+        val startDateTimeString = s"${targetDate}T${startTimeString}"
+        val endDateTimeString = s"${targetDate}T${endTimeString}"
+        var ret = fb.getSleepDataSeries(targetDate)
+        println(ret)
+        Logger.debug("ret.sleep={}", ret.sleep.toSeq)
+        Logger.debug("ret.sleep(0)={}", ret.sleep.toSeq(0))
+        Logger.debug("ret.sleep(0).dateOfSleep={}", ret.sleep.toSeq(0).dateOfSleep)
+        Logger.debug("ret.sleep(0).duration={}", ret.sleep.toSeq(0).duration)
+        Logger.debug("ret.sleep(0).endTime={}", ret.sleep.toSeq(0).endTime)
+        Logger.debug("ret.sleep(0).levels={}", ret.sleep.toSeq(0).levels)
+        Logger.debug("ret.sleep(0).levels.data={}", ret.sleep.toSeq(0).levels.data.toSeq)
+        Logger.debug("ret.summary={}", ret.summary)
+
     }

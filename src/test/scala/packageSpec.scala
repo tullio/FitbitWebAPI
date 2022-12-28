@@ -30,6 +30,6 @@ class packageSpec extends AnyFunSuite:
         //Logger.debug("Duration Object={}", interval.toDuration.getStandardHours)
         //Logger.debug("Period Object={}", interval.toPeriod.getDays)
         //Logger.debug("Period Object={}", interval.toPeriod.getHours)
-        assert(interval.toDuration.getStandardDays == 4)
+        assert(interval.toDuration.getStandardDays == 24)
         assert(interval.toDuration.getStandardHours == 119)
     }

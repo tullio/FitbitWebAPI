@@ -1,4 +1,10 @@
-StartDate = "2022-6-1"
+StartDate = "2022-09-08"
 StartTime = "00:00"
-EndDate = "2022-6-5"
+EndDate = "2022-09-30"
 EndTime = "23:59"
+DownSamplingWindowBySeconds = 15
+#DetectWindowByMinutes = 20
+DetectWindowByMinutes = 10
+#DelayWindow = 5 # DownSamplingWindowBySeconds*this(default: 15*5=75sec)
+DelayWindow = 8 # DownSamplingWindowBySeconds*this(default: 15*8=120sec)
+

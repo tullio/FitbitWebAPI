@@ -73,7 +73,8 @@ extension(x: NDArray)
       val newShape = x.getShape.add(d)
       x.reshape(newShape)
   def getMinMaxPair =
-      (x.min().getDouble().toInt, x.max().getDouble().toInt)
+      //(x.min().getDouble().toInt, x.max().getDouble().toInt)
+      (x.min().getFloat().toInt, x.max().getFloat().toInt)
   def toNumpy(np: Module) =
       //np.array(x.toDoubleArray.toPythonProxy).reshape(x.getShape.getShape.toPythonProxy) 
       np.array(x.toType(DataType.FLOAT64, false).toDoubleArray.toPythonProxy)
