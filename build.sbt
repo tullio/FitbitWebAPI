@@ -22,6 +22,8 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 //    Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
+    libraryDependencies +=
+      "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
 
     //libraryDependencies += "org.nd4j" % "nd4j-api" % "1.0.0-M2",
     //libraryDependencies += "org.nd4j" % "nd4j" % "1.0.0-M2",
@@ -48,15 +50,19 @@ lazy val root = project
     libraryDependencies += "org.scala-lang.modules" %% "scala-swing" % "3.0.0",
     libraryDependencies += "com.github.psambit9791" % "jdsp" % "1.0.0",
     //libraryDependencies += "org.tinylog" % "tinylog" % "2.1.2",
-    libraryDependencies += "org.tinylog" % "tinylog-api" % "2.1.2",
-    libraryDependencies += "org.tinylog" % "tinylog-impl" % "2.1.2",
+    libraryDependencies += "org.tinylog" % "tinylog-api" % "2.5.0",
+    libraryDependencies += "org.tinylog" % "tinylog-impl" % "2.5.0",
     libraryDependencies += "org.jetbrains.bio" % "npy" % "0.3.5",
     libraryDependencies += "me.shadaj" %% "scalapy-core" % "0.5.2",
     //libraryDependencies += "me.shadaj" %%% "scalapy-core" % "0.5.2",
     libraryDependencies += "ai.kien" %% "python-native-libs" % "0.2.2",
     libraryDependencies += "ai.djl" % "api" % "0.19.0",
+    libraryDependencies += "ai.djl" % "basicdataset" % "0.19.0",
+    libraryDependencies += "ai.djl" % "model-zoo" % "0.19.0",
 //    libraryDependencies += "ai.djl.mxnet" % "mxnet-engine" % "0.19.0" % "runtime", 
     libraryDependencies += "ai.djl.mxnet" % "mxnet-engine" % "0.19.0" , 
+    libraryDependencies += "org.slf4j" % "slf4j-simple" % "1.7.32" , 
+
 //    libraryDependencies += "ai.djl.mxnet" % "mxnet-native-mkl" % "1.9.1" % "runtime",
 //    libraryDependencies += "net.java.dev.jna" % "jna" % "5.12.1",
 //    libraryDependencies += "net.java.dev.jna" % "jna-platform" % "5.12.1"
