@@ -4,3 +4,8 @@
 *.npy
 *.csv
 *.pdgm
+.bloop/*
+.bsp/*
+.metals/*
+__pycache__/*
+iframe_figures/*
