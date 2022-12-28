@@ -11,8 +11,8 @@ case class Sleep(sleep: Array[sleep], summary: Summary)
 object Sleep:
   implicit val decoder: Decoder[Sleep] = deriveDecoder
   def apply(json: String) =
-      //Logger.debug("json={}", json.substring(10))
-      Logger.debug("decode={}", decode[Sleep](json))
+      Logger.tags("DEBUG").debug("json={}", json.substring(10))
+      Logger.tags("DEBUG").debug("decode={}", decode[Sleep](json))
       decode[Sleep](json).right.get
 
 case class sleep(
@@ -37,45 +37,39 @@ object sleep:
 
 case class sleepLevels(
     data: Array[sleepData],
-    shortData: Array[sleepData],
+    shortData: Option[Array[sleepData]],
     summary: sleepSummary,
 )
 object sleepLevels:
   implicit val decoder: Decoder[sleepLevels] = deriveDecoder
 
 case class sleepData(
-    dateTime: String,
     level: String,
+    dateTime: String,
     seconds: Int)
 object sleepData:
   implicit val decoder: Decoder[sleepData] = deriveDecoder
 
 case class sleepSummary(
-    deep: DeepData,
-    light: LightData,
-    rem: RemData,
-    wake: WakeData
+    deep: Option[levelData],
+    light: Option[levelData],
+    rem: Option[levelData],
+    wake: Option[levelData],
+    restless: Option[levelData],
+    asleep: Option[levelData],
+    awake: Option[levelData]
 )
-case class DeepData(
+object sleepSummary:
+  implicit val decoder: Decoder[sleepSummary] = deriveDecoder
+
+case class levelData(
     count: Long,
     minutes: Long,
-    thirtyDayAvgMinutes: Long
+    thirtyDayAvgMinutes: Option[Long]
 )
-case class LightData(
-    count: Long,
-    minutes: Long,
-    thirtyDayAvgMinutes: Long
-)
-case class RemData(
-    count: Long,
-    minutes: Long,
-    thirtyDayAvgMinutes: Long
-)
-case class WakeData(
-    count: Long,
-    minutes: Long,
-    thirtyDayAvgMinutes: Long
-)
+object levelData:
+  implicit val decoder: Decoder[levelData] = deriveDecoder
+
 /**
 case class asleep(
     count: Long,
