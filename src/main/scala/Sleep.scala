@@ -11,8 +11,8 @@ case class Sleep(sleep: Array[sleep], summary: Summary)
 object Sleep:
   implicit val decoder: Decoder[Sleep] = deriveDecoder
   def apply(json: String) =
-      Logger.tags("DEBUG").debug("json={}", json.substring(10))
-      Logger.tags("DEBUG").debug("decode={}", decode[Sleep](json))
+      //Logger.tags("DEBUG").debug("json={}", json.substring(10))
+      //Logger.tags("DEBUG").debug("decode={}", decode[Sleep](json))
       decode[Sleep](json).right.get
 
 case class sleep(
