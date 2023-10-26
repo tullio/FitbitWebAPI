@@ -7,8 +7,10 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.tinylog.Logger
 import ai.djl.ndarray.{NDArrays, NDManager} 
+import ai.djl.ndarray.index.NDIndex
 import org.nd4j.nativeblas.Nd4jCpu.draw_bounding_boxes
 import ai.djl.ndarray.types.{Shape, DataType}
+import scala.jdk.CollectionConverters._
 
 class NDArrayExtensionSpec extends AnyFunSuite:
     test("Variance covariance matrix should be calculated"){
@@ -33,6 +35,16 @@ class NDArrayExtensionSpec extends AnyFunSuite:
        Logger.info(x.dot(y))
        assert(x.dot(y) === 32.0)
     }
+    test("HStack should be calculated"){
+       val manager = NDManager.newBaseManager()
+       val x = manager.create(Array(1.0, 2.0))
+       val y = manager.create(Array(Array(3.0, 4.0), Array(5.0, 6.0)))
+       Logger.tags("NOTICE").info(x)
+       Logger.tags("NOTICE").info(y)
+       //Logger.tags("NOTICE").info(x.reshape(2, 1).stack(y, 0))
+       Logger.tags("NOTICE").info(x.reshape(2, 1).concat(y, 1))
+       //assert(x.dot(y) === 32.0)
+    }
     test("Frobenius inner product should be calculated"){
        val manager = NDManager.newBaseManager()
        val x = manager.create(Array(Array(1.0, 2.0), Array(3.0, 4.0)))
@@ -47,4 +59,59 @@ class NDArrayExtensionSpec extends AnyFunSuite:
        assert(x.jfip(x) === 1.0)
        assert(x.jfip(y) === 0.6862745098039216)
        assert(x.jfip(z) === -1.0)
+    }
+    test("Regularize should be calculated"){
+       val manager = NDManager.newBaseManager()
+       val x = manager.create(Array(Array(1.0, 2.0), Array(3.0, 4.0)))
+                      .toType(DataType.FLOAT32, false)
+       Logger.tags("NOTICE").info(x)
+       Logger.tags("NOTICE").info(x.regularizeVertically(10))
+       Logger.tags("NOTICE").info(x.regularizeHolizontally(10))
+    }
+    test("Sample should be calculated"){
+       val manager = NDManager.newBaseManager()
+       val x = manager.create(Array(Array(1.0, 2.0, 3.0, 4.0))).transpose
+                      .toType(DataType.FLOAT32, false)
+       Logger.tags("NOTICE").info(x)
+       Logger.tags("NOTICE").info(x.sample(0.5))
+    }
+    test("Get and take should be compared"){
+       val manager = NDManager.newBaseManager()
+       val x = manager.create(Array(1.0, 2.0, 3.0, 4.0))
+       Logger.tags("NOTICE").info(x)
+       val indexArray = manager.create(Array(0))
+       Logger.tags("NOTICE").info("get({})={}", indexArray.toArray.toSeq, x.get(indexArray))
+       Logger.tags("NOTICE").info("take({})={}", indexArray.toArray.toSeq, x.take(indexArray))
+       Logger.tags("NOTICE").info("===================", "")
+       indexArray.set(Array(1))
+       Logger.tags("NOTICE").info("get({})={}", indexArray.toArray.toSeq, x.get(indexArray))
+       Logger.tags("NOTICE").info("take({})={}", indexArray.toArray.toSeq, x.take(indexArray))
+
+       Logger.tags("NOTICE").info("===================", "")
+       val indexArray2 = manager.create(Array(0, 1))
+       Logger.tags("NOTICE").info("get({})={}", indexArray2.toArray.toSeq, x.get(indexArray2))
+       Logger.tags("NOTICE").info("take({})={}", indexArray2.toArray.toSeq, x.take(indexArray2))
+       Logger.tags("NOTICE").info("===================", "")
+       indexArray2.set(Array(1, 2))
+       Logger.tags("NOTICE").info("get({})={}", indexArray2.toArray.toSeq, x.get(indexArray2))
+       Logger.tags("NOTICE").info("take({})={}", indexArray2.toArray.toSeq, x.take(indexArray2))
+
+
+    }
+    test("NDIndex should be explaind"){
+       val manager = NDManager.newBaseManager()
+       Logger.tags("NOTICE").info(NDIndex().addAllDim().getIndices.asScala.map(f => f.getRank))
+       Logger.tags("NOTICE").info(NDIndex().addAllDim().addAllDim().getIndices.asScala.map(f => f.getRank))
+       Logger.tags("NOTICE").info(NDIndex().addIndices(0).getIndices.asScala.map(f => f.getRank))
+       Logger.tags("NOTICE").info(NDIndex().addIndices(0, 1).getIndices.asScala.map(f => f.getRank))
+       Logger.tags("NOTICE").info(NDIndex().addPickDim(manager.create(Array(0))).getIndices.asScala.map(f => f.getRank))
+       Logger.tags("NOTICE").info(NDIndex().addPickDim(manager.create(Array(0, 1))).getIndices.asScala.map(f => f.getRank))
+    }
+    test("How to obtain one row"){
+       val manager = NDManager.newBaseManager()
+       val x = manager.create(Array(Array(1.0, 2.0), Array(3.0, 4.0)))
+       Logger.tags("NOTICE").info(x)
+       val indexArray = NDIndex().addSliceDim(1, 2).addAllDim()
+       Logger.tags("NOTICE").info("indexArray={}", indexArray.getIndices.asScala)
+       Logger.tags("NOTICE").info("slice={}", x.get(indexArray))
     }

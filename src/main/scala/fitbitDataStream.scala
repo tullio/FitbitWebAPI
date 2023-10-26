@@ -300,7 +300,7 @@ class FitbitDataStream(fileName: String):
         ret
 
     def getRefreshToken =
-        Logger.debug("getRefreshToken", true)
+        Logger.tags("DEBUG").debug("getRefreshToken: refresh_token={}", refreshToken)
         val url = uri"https://api.fitbit.com/oauth2/token"
         val body = collection.mutable.Map[String, String]()
         body("grant_type") = "refresh_token"
